@@ -13,7 +13,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for local import chec
 
         def __init__(self) -> None:
             self._root = tk.Tk()
-            self._root.title("Campaign Suppression Manager")
+            self._root.title("ERA-Campaign Suppression Manager")
             self._root.geometry("1000x700")
             self._root.minsize(900, 650)
 
@@ -56,6 +56,8 @@ else:
     from config.user_settings import UserSettings, load_user_settings, save_user_settings
     from core.processor import CampaignSuppressionProcessor
     from models.mapping import MappingStrategy
+    from models.run import CampaignMappingPreview, ValidationReport
+    from services.mapping_history import load_mapping_history, merge_mapping_history, save_mapping_history
 
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
@@ -67,15 +69,16 @@ else:
 
         def __init__(self) -> None:
             super().__init__()
-            self.title("Campaign Suppression Manager")
+            self.title("ERA-Campaign Suppression Manager")
             self.geometry("1220x820")
             self.minsize(1080, 740)
+            self.configure(fg_color=("#f3f7ff", "#0b1220"))
 
             self._excel_path: Path | None = None
             self._zip_folder: Path | None = None
             self._output_folder: Path | None = None
             self._validation_report = None
-            self._selected_strategy = ctk.StringVar(value=MappingStrategy.EXACT.value)
+            self._selected_strategy = ctk.StringVar(value=MappingStrategy.AUTO.value)
             self._pattern_template = ctk.StringVar(value="{campaign}")
             self._user_settings = load_user_settings()
             self._is_busy = False
@@ -86,105 +89,138 @@ else:
             self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         def _build_layout(self) -> None:
-            header = ctk.CTkFrame(self, corner_radius=16)
-            header.pack(fill="x", padx=20, pady=(20, 12))
+            self.grid_columnconfigure(0, weight=1)
+            self.grid_rowconfigure(0, weight=1)
 
-            ctk.CTkLabel(
-                header,
-                text="Campaign Suppression Manager",
-                font=ctk.CTkFont(size=26, weight="bold"),
-            ).pack(anchor="w", padx=18, pady=(18, 4))
-            ctk.CTkLabel(
-                header,
-                text="Validate the campaign-to-ZIP mapping before extracting suppression files.",
-                font=ctk.CTkFont(size=14),
-            ).pack(anchor="w", padx=18, pady=(0, 18))
+            self._scroll_frame = ctk.CTkScrollableFrame(self, corner_radius=0, fg_color="transparent")
+            self._scroll_frame.grid(row=0, column=0, sticky="nsew")
+            self._scroll_frame.grid_columnconfigure(0, weight=1)
 
-            top = ctk.CTkFrame(self, corner_radius=16)
-            top.pack(fill="x", padx=20, pady=(0, 12))
-            top.grid_columnconfigure(1, weight=1)
+            container = ctk.CTkFrame(self._scroll_frame, fg_color="transparent")
+            container.grid(row=0, column=0, sticky="nsew", padx=18, pady=18)
+            container.grid_columnconfigure(0, weight=1)
+            container.grid_rowconfigure(4, weight=1)
 
-            self._excel_entry = self._create_path_row(top, 0, "Campaign Excel", self._browse_excel)
-            self._zip_entry = self._create_path_row(top, 1, "ZIP Folder", self._browse_zip_folder)
-            self._output_entry = self._create_path_row(top, 2, "Output Folder", self._browse_output_folder)
-            self._mapping_row = self._create_mapping_row(top, 3)
+            header = ctk.CTkFrame(container, corner_radius=24, border_width=1, fg_color=("#f8fbff", "#162132"))
+            header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+            header.grid_columnconfigure(0, weight=1)
+            header.grid_columnconfigure(1, weight=0)
 
-            self._pattern_template_row = ctk.CTkFrame(top, fg_color="transparent")
-            self._pattern_template_row.grid(row=4, column=0, columnspan=3, sticky="ew", padx=18, pady=(0, 12))
-            self._pattern_template_row.grid_columnconfigure(1, weight=1)
-            ctk.CTkLabel(self._pattern_template_row, text="Pattern Template").grid(row=0, column=0, sticky="w", padx=(0, 12))
-            self._pattern_template_entry = ctk.CTkEntry(self._pattern_template_row, textvariable=self._pattern_template)
-            self._pattern_template_entry.grid(row=0, column=1, sticky="ew")
-            ctk.CTkLabel(self._pattern_template_row, text="Use {campaign} as the campaign placeholder.", text_color=("gray30", "gray70")).grid(row=1, column=1, sticky="w", pady=(4, 0))
-            self._pattern_template_row.grid_remove()
+            left = ctk.CTkFrame(header, fg_color="transparent")
+            left.grid(row=0, column=0, sticky="w", padx=20, pady=18)
+            ctk.CTkLabel(left, text="ERA-Campaign Suppression Manager", font=ctk.CTkFont(size=24, weight="bold")).pack(anchor="w")
+            ctk.CTkLabel(left, text="Validate smart campaign-to-ZIP mapping, review it visually, and extract suppression files with confidence.", font=ctk.CTkFont(size=13), text_color=("gray50", "gray70")).pack(anchor="w", pady=(6, 10))
+            self._build_header_badges(left)
 
-            actions = ctk.CTkFrame(self, corner_radius=16)
-            actions.pack(fill="x", padx=20, pady=(0, 12))
-            actions.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+            right = ctk.CTkFrame(header, corner_radius=18, border_width=1, fg_color=("#eef7ff", "#1f2b3d"))
+            right.grid(row=0, column=1, sticky="e", padx=18, pady=18)
+            ctk.CTkLabel(right, text="Smart flow", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=14, pady=(12, 4))
+            ctk.CTkLabel(right, text="Auto-match • Preview • Extract", font=ctk.CTkFont(size=12), text_color=("gray50", "gray70")).pack(anchor="w", padx=14, pady=(0, 12))
 
-            self._validate_button = ctk.CTkButton(actions, text="Validate", height=42, command=self._validate)
-            self._validate_button.grid(row=0, column=0, sticky="ew", padx=18, pady=16)
+            input_card = self._create_section_card(container, 1, "Get started", "Select your campaign source, ZIP folder, and output destination.")
+            self._excel_entry = self._create_path_card(input_card, 0, "Campaign Excel", "Workbook with the campaign names.", self._browse_excel)
+            self._zip_entry = self._create_path_card(input_card, 1, "ZIP Folder", "Folder containing the downloaded ZIP archives.", self._browse_zip_folder)
+            self._output_entry = self._create_path_card(input_card, 2, "Output Folder", "Destination for extracted suppression files.", self._browse_output_folder)
 
-            self._start_button = ctk.CTkButton(actions, text="Start", height=42, command=self._start, state="disabled")
-            self._start_button.grid(row=0, column=1, sticky="ew", padx=18, pady=16)
+            actions_card = self._create_section_card(container, 2, "Workflow", "Run validation, inspect the preview, and extract with confidence.")
+            actions_card.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
 
-            self._clear_button = ctk.CTkButton(actions, text="Clear", height=42, command=self._clear)
-            self._clear_button.grid(row=0, column=2, sticky="ew", padx=18, pady=16)
+            self._validate_button = ctk.CTkButton(actions_card, text="Validate", height=46, command=self._validate, corner_radius=14, fg_color=("#2563eb", "#3b82f6"), hover_color=("#1d4ed8", "#60a5fa"))
+            self._validate_button.grid(row=0, column=0, sticky="ew", padx=8, pady=14)
 
-            self._open_button = ctk.CTkButton(actions, text="Open Output Folder", height=42, command=self._open_output_folder)
-            self._open_button.grid(row=0, column=3, sticky="ew", padx=18, pady=16)
+            self._start_button = ctk.CTkButton(actions_card, text="Extract", height=46, command=self._start, state="disabled", corner_radius=14, fg_color=("#0f766e", "#14b8a6"), hover_color=("#115e59", "#2dd4bf"))
+            self._start_button.grid(row=0, column=1, sticky="ew", padx=8, pady=14)
 
-            self._preview_button = ctk.CTkButton(actions, text="Preview Mapping", height=42, command=self._show_preview_only, state="disabled")
-            self._preview_button.grid(row=0, column=4, sticky="ew", padx=18, pady=16)
+            self._preview_button = ctk.CTkButton(actions_card, text="Preview", height=46, command=self._show_preview_only, state="disabled", corner_radius=14, fg_color=("#7c3aed", "#8b5cf6"), hover_color=("#6d28d9", "#a78bfa"))
+            self._preview_button.grid(row=0, column=2, sticky="ew", padx=8, pady=14)
 
-            content = ctk.CTkFrame(self, corner_radius=16)
-            content.pack(fill="both", expand=True, padx=20, pady=(0, 12))
-            content.grid_columnconfigure(0, weight=1)
-            content.grid_columnconfigure(1, weight=1)
-            content.grid_rowconfigure(1, weight=1)
+            self._clear_button = ctk.CTkButton(actions_card, text="Clear", height=46, command=self._clear, corner_radius=14, fg_color=("#475569", "#64748b"), hover_color=("#334155", "#94a3b8"))
+            self._clear_button.grid(row=0, column=3, sticky="ew", padx=8, pady=14)
 
-            ctk.CTkLabel(content, text="Preview / Validation", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(16, 8))
-            ctk.CTkLabel(content, text="Live Log", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=1, sticky="w", padx=18, pady=(16, 8))
+            self._open_button = ctk.CTkButton(actions_card, text="Open Output", height=46, command=self._open_output_folder, corner_radius=14, fg_color=("#1f2937", "#374151"), hover_color=("#111827", "#4b5563"))
+            self._open_button.grid(row=0, column=4, sticky="ew", padx=8, pady=14)
 
-            self._preview_text = ctk.CTkTextbox(content, wrap="word")
-            self._preview_text.grid(row=1, column=0, sticky="nsew", padx=(18, 9), pady=(0, 16))
-
-            self._log_text = ctk.CTkTextbox(content, wrap="word")
-            self._log_text.grid(row=1, column=1, sticky="nsew", padx=(9, 18), pady=(0, 16))
-
-            footer = ctk.CTkFrame(self, corner_radius=16)
-            footer.pack(fill="x", padx=20, pady=(0, 20))
-
-            self._progress = ctk.CTkProgressBar(footer)
+            summary_card = self._create_section_card(container, 3, "Summary", "Essential status and mapping preview for your current run.")
+            summary_card.grid_columnconfigure(0, weight=1)
+            self._preview_text = self._create_panel(summary_card, 0, "Preview / Validation", "Review resolved campaign → ZIP mappings and issue highlights.")
+            self._status_label = ctk.CTkLabel(summary_card, textvariable=self._status_text, anchor="w", font=ctk.CTkFont(size=12, weight="bold"), text_color=("#0f172a", "#475569"))
+            self._status_label.grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 8))
+            self._progress = ctk.CTkProgressBar(summary_card, height=14, corner_radius=999)
             self._progress.set(0)
-            self._progress.pack(fill="x", padx=18, pady=(16, 10))
+            self._progress.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 18))
 
-            self._status_label = ctk.CTkLabel(footer, textvariable=self._status_text, anchor="w")
-            self._status_label.pack(fill="x", padx=18, pady=(0, 16))
+            advanced_card = self._create_section_card(container, 4, "Advanced", "Open advanced diagnostics and expert settings.")
+            toggle_row = ctk.CTkFrame(advanced_card, fg_color="transparent")
+            toggle_row.grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 12))
+            toggle_row.grid_columnconfigure(0, weight=1)
+            self._advanced_toggle_button = ctk.CTkButton(toggle_row, text="Show advanced details", command=self._toggle_advanced_details, corner_radius=14, fg_color=("#e2e8f0", "#334155"), hover_color=("#cbd5e1", "#475569"), text_color=("#0f172a", "#f8fafc"))
+            self._advanced_toggle_button.grid(row=0, column=0, sticky="w")
 
-        def _create_path_row(self, parent: ctk.CTkFrame, row: int, label: str, command) -> ctk.CTkEntry:
-            ctk.CTkLabel(parent, text=label).grid(row=row, column=0, sticky="w", padx=18, pady=12)
-            entry = ctk.CTkEntry(parent)
-            entry.grid(row=row, column=1, sticky="ew", padx=(0, 12), pady=12)
-            ctk.CTkButton(parent, text="Browse", width=110, command=command).grid(row=row, column=2, sticky="e", padx=18, pady=12)
+            self._advanced_frame = ctk.CTkFrame(advanced_card, corner_radius=16, fg_color=("#ffffff", "#141e2f"))
+            self._advanced_frame.grid(row=3, column=0, sticky="nsew", padx=18, pady=(0, 16))
+            self._advanced_frame.grid_columnconfigure(0, weight=1)
+            self._advanced_frame.grid_rowconfigure(0, weight=1)
+            self._advanced_frame.grid_remove()
+
+            self._advanced_tabs = ctk.CTkTabview(self._advanced_frame, width=1080, height=280, corner_radius=16)
+            self._advanced_tabs.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+            self._advanced_tabs.add("Logs")
+            self._advanced_tabs.add("Settings")
+            self._advanced_tabs.tab("Logs").grid_columnconfigure(0, weight=1)
+            self._advanced_tabs.tab("Logs").grid_rowconfigure(0, weight=1)
+            self._log_text = ctk.CTkTextbox(self._advanced_tabs.tab("Logs"), wrap="word", corner_radius=14, border_width=1, font=ctk.CTkFont(size=12), fg_color=("#f8fafc", "#111827"), text_color=("#0f172a", "#e2e8f0"))
+            self._log_text.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
+
+            settings_tab = self._advanced_tabs.tab("Settings")
+            settings_tab.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(settings_tab, text="Mapping Strategy", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(18, 6))
+            self._strategy_menu = ctk.CTkOptionMenu(settings_tab, values=[strategy.value for strategy in MappingStrategy], variable=self._selected_strategy, command=self._handle_strategy_change, width=240)
+            self._strategy_menu.grid(row=1, column=0, sticky="w", padx=18, pady=(0, 14))
+            ctk.CTkLabel(settings_tab, text="Pattern Template", font=ctk.CTkFont(size=13, weight="bold")).grid(row=2, column=0, sticky="w", padx=18, pady=(12, 6))
+            self._pattern_entry = ctk.CTkEntry(settings_tab, textvariable=self._pattern_template, height=38, border_width=1, corner_radius=12, fg_color=("#f8fafc", "#0f172a"), text_color=("#0f172a", "#e2e8f0"))
+            self._pattern_entry.grid(row=3, column=0, sticky="w", padx=18, pady=(0, 16))
+
+        def _build_header_badges(self, parent: ctk.CTkFrame) -> None:
+            badges = ["Auto-learning", "Alias-aware", "Preview-first"]
+            for index, badge in enumerate(badges):
+                badge_frame = ctk.CTkFrame(parent, corner_radius=999, border_width=1, fg_color=("#eff6ff", "#243447"))
+                badge_frame.pack(anchor="w", pady=2)
+                ctk.CTkLabel(badge_frame, text=badge, font=ctk.CTkFont(size=11, weight="bold"), text_color=("#2563eb", "#9fd6ff")).pack(padx=10, pady=6)
+
+        def _create_section_card(self, parent: ctk.CTkFrame, row: int, title: str, subtitle: str) -> ctk.CTkFrame:
+            card = ctk.CTkFrame(parent, corner_radius=24, border_width=1, fg_color=("#ffffff", "#0f172a"))
+            card.grid(row=row, column=0, sticky="ew", padx=16, pady=8)
+            card.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=18, weight="bold"), text_color=("#0f172a", "#e2e8f0")).grid(row=0, column=0, sticky="w", padx=18, pady=(18, 4))
+            ctk.CTkLabel(card, text=subtitle, font=ctk.CTkFont(size=12), text_color=("#475569", "#94a3b8")).grid(row=1, column=0, sticky="w", padx=18, pady=(0, 16))
+            return card
+
+        def _create_path_card(self, parent: ctk.CTkFrame, row: int, label: str, hint: str, command) -> ctk.CTkEntry:
+            card = ctk.CTkFrame(parent, corner_radius=20, border_width=1, fg_color=("#f8fafc", "#111827"))
+            card.grid(row=row, column=0, sticky="ew", padx=10, pady=10)
+            card.grid_columnconfigure(0, weight=1)
+            card.grid_columnconfigure(1, weight=0)
+
+            ctk.CTkLabel(card, text=label, font=ctk.CTkFont(size=13, weight="bold"), text_color=("#0f172a", "#e2e8f0")).grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(16, 4))
+            ctk.CTkLabel(card, text=hint, font=ctk.CTkFont(size=11), text_color=("#475569", "#94a3b8")).grid(row=1, column=0, columnspan=2, sticky="w", padx=16, pady=(0, 14))
+
+            entry = ctk.CTkEntry(card, height=44, border_width=1, corner_radius=14, fg_color=("#f8fafc", "#111827"), text_color=("#0f172a", "#e2e8f0"))
+            entry.grid(row=2, column=0, sticky="ew", padx=16, pady=(0, 16))
+            ctk.CTkButton(card, text="Browse", width=120, height=40, command=command, corner_radius=14, fg_color=("#2563eb", "#3b82f6"), hover_color=("#1d4ed8", "#60a5fa")).grid(row=2, column=1, sticky="e", padx=(12, 16), pady=(0, 16))
             return entry
 
-        def _create_mapping_row(self, parent: ctk.CTkFrame, row: int) -> None:
-            ctk.CTkLabel(parent, text="Mapping Strategy").grid(row=row, column=0, sticky="w", padx=18, pady=12)
-            selector = ctk.CTkOptionMenu(
-                parent,
-                values=[strategy.value for strategy in MappingStrategy],
-                variable=self._selected_strategy,
-                command=self._handle_strategy_change,
-            )
-            selector.grid(row=row, column=1, sticky="w", padx=(0, 12), pady=12)
-            ctk.CTkLabel(parent, text="Exact, partial, or pattern-based matching.", text_color=("gray30", "gray70")).grid(row=row, column=2, sticky="w", padx=18, pady=12)
+        def _create_panel(self, parent: ctk.CTkFrame, column: int, title: str, hint: str) -> ctk.CTkTextbox:
+            panel = ctk.CTkFrame(parent, corner_radius=20, border_width=1, fg_color=("#f8fafc", "#111827"))
+            panel.grid(row=0, column=column, sticky="nsew", padx=(18, 9) if column == 0 else (9, 18), pady=18)
+            panel.grid_columnconfigure(0, weight=1)
+            panel.grid_rowconfigure(1, weight=1)
+            ctk.CTkLabel(panel, text=title, font=ctk.CTkFont(size=15, weight="bold"), text_color=("#0f172a", "#e2e8f0")).grid(row=0, column=0, sticky="w", padx=18, pady=(18, 4))
+            ctk.CTkLabel(panel, text=hint, font=ctk.CTkFont(size=11), text_color=("#475569", "#94a3b8")).grid(row=1, column=0, sticky="w", padx=18, pady=(0, 12))
+            textbox = ctk.CTkTextbox(panel, wrap="word", corner_radius=16, border_width=1, font=ctk.CTkFont(size=12), fg_color=("#eff6ff", "#0f172a"), text_color=("#0f172a", "#e2e8f0"))
+            textbox.grid(row=2, column=0, sticky="nsew", padx=18, pady=(0, 18))
+            return textbox
 
         def _handle_strategy_change(self, selected_value: str) -> None:
-            if selected_value == MappingStrategy.PATTERN.value:
-                self._pattern_template_row.grid()
-            else:
-                self._pattern_template_row.grid_remove()
             self._persist_user_settings()
 
         def _browse_excel(self) -> None:
@@ -226,7 +262,15 @@ else:
             if self._validation_report is None:
                 messagebox.showinfo("Preview", "Run Validate first.")
                 return
-            self._show_preview_dialog(self._validation_report)
+
+            if self._show_preview_dialog(self._validation_report):
+                self._set_status("Preview confirmed")
+                self._set_start_enabled(not self._validation_report.issues)
+                self._append_log("Preview confirmed")
+            else:
+                self._set_status("Preview canceled")
+                self._set_start_enabled(False)
+                self._append_log("Preview canceled by user")
 
         def _start(self) -> None:
             if self._validation_report is None or self._validation_report.issues:
@@ -278,11 +322,8 @@ else:
             from core.processor import CampaignSuppressionProcessor
             from models.mapping import MappingStrategy
 
-            selected_strategy = MappingStrategy(self._selected_strategy.get())
             pattern_template = self._pattern_template.get().strip() or None
-            if selected_strategy == MappingStrategy.PATTERN and not pattern_template:
-                messagebox.showerror("Missing pattern template", "Provide a pattern template when using pattern mapping.")
-                return None
+            selected_strategy = MappingStrategy(self._selected_strategy.get()) if self._selected_strategy.get() in {strategy.value for strategy in MappingStrategy} else MappingStrategy.AUTO
 
             run_config = RunConfig(
                 excel_path=self._excel_path,
@@ -297,11 +338,19 @@ else:
             lines: list[str] = []
             for output_position, preview in enumerate(validation_report.preview_rows, start=1):
                 if preview.issue is None and preview.selected_zip_path is not None:
-                    lines.append(f"{output_position:03d}. {preview.campaign.name} -> {preview.selected_zip_path.name}")
+                    score_text = f" (score={preview.selected_score})" if preview.selected_score else ""
+                    lines.append(f"{output_position:03d}. {preview.campaign.name} -> {preview.selected_zip_path.name}{score_text}")
+                    if preview.warning:
+                        lines.append(f"    WARNING: {preview.warning}")
                 else:
                     lines.append(f"{output_position:03d}. {preview.campaign.name} -> ISSUE")
                     if preview.issue is not None:
                         lines.append(f"    {preview.issue.message}")
+
+            if validation_report.warnings:
+                lines.append("")
+                lines.append("Warnings:")
+                lines.extend(f"- {warning}" for warning in validation_report.warnings)
 
             if validation_report.issues:
                 lines.append("")
@@ -316,28 +365,102 @@ else:
         def _show_preview_dialog(self, validation_report) -> bool:
             dialog = ctk.CTkToplevel(self)
             dialog.title("Preview Mapping")
-            dialog.geometry("900x650")
+            dialog.geometry("960x720")
             dialog.transient(self)
             dialog.grab_set()
 
-            ctk.CTkLabel(dialog, text="Review campaign -> ZIP mapping before extraction.", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=18, pady=(18, 8))
-            preview_box = ctk.CTkTextbox(dialog, wrap="word")
-            preview_box.pack(fill="both", expand=True, padx=18, pady=(0, 18))
-            preview_box.insert("1.0", self._format_validation_report(validation_report))
-            preview_box.configure(state="disabled")
+            ctk.CTkLabel(dialog, text="Review and adjust campaign -> ZIP mapping before extraction.", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=18, pady=(18, 8))
+            ctk.CTkLabel(dialog, text="If any mapping looks wrong, choose the correct ZIP from the dropdown.", text_color=("gray30", "gray70")).pack(anchor="w", padx=18, pady=(0, 8))
+
+            all_zip_paths = tuple(validation_report.available_zip_paths)
+            zip_choices = [str(path) for path in all_zip_paths]
+            if not zip_choices:
+                zip_choices = [""]
+
+            scroll_frame = ctk.CTkScrollableFrame(dialog, width=920, height=520, corner_radius=16)
+            scroll_frame.pack(fill="both", expand=True, padx=18, pady=(0, 12))
+
+            row_vars: list[tuple[CampaignMappingPreview, ctk.StringVar]] = []
+            for preview in validation_report.preview_rows:
+                row = ctk.CTkFrame(scroll_frame, corner_radius=12)
+                row.pack(fill="x", pady=6, padx=8)
+                row.grid_columnconfigure(1, weight=1)
+
+                ctk.CTkLabel(row, text=preview.campaign.name, width=220, anchor="w").grid(row=0, column=0, sticky="w", padx=(12, 8), pady=8)
+                selected_value = str(preview.selected_zip_path) if preview.selected_zip_path and str(preview.selected_zip_path) in zip_choices else zip_choices[0]
+                selection_var = ctk.StringVar(value=selected_value)
+                ctk.CTkOptionMenu(row, values=zip_choices, variable=selection_var, width=640).grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=8)
+
+                issue_text = preview.issue.message if preview.issue is not None else ""
+                ctk.CTkLabel(row, text=issue_text, text_color=("#ff5555", "#ff9999"), anchor="w").grid(row=1, column=0, columnspan=2, sticky="w", padx=(12, 12), pady=(0, 10))
+                row_vars.append((preview, selection_var))
 
             confirmed = {"value": False}
 
-            button_row = ctk.CTkFrame(dialog)
-            button_row.pack(fill="x", padx=18, pady=(0, 18))
+            def _validate_selection() -> bool:
+                selected_values = [selection_var.get() for _, selection_var in row_vars]
+                if any(not value.strip() for value in selected_values):
+                    messagebox.showerror("Mapping validation", "Please select a ZIP file for every campaign.")
+                    return False
+                if len(set(selected_values)) != len(selected_values):
+                    messagebox.showerror("Mapping validation", "Each campaign must map to a unique ZIP file.")
+                    return False
+                return True
 
             def _confirm() -> None:
+                if not _validate_selection():
+                    return
+
+                selected_mapping = {preview.campaign.name: Path(selection_var.get()) for preview, selection_var in row_vars}
+                non_mapping_issues = tuple(
+                    issue
+                    for issue in validation_report.issues
+                    if not issue.message.startswith("Expected exactly one ZIP match")
+                )
+                updated_preview_rows = []
+                for preview, _ in row_vars:
+                    selected_path = selected_mapping[preview.campaign.name]
+                    selected_score = 0
+                    for candidate in preview.candidate_scores:
+                        if candidate.zip_path == selected_path:
+                            selected_score = candidate.score
+                            break
+
+                    updated_preview_rows.append(
+                        CampaignMappingPreview(
+                            campaign=preview.campaign,
+                            matched_zip_paths=preview.matched_zip_paths,
+                            candidate_scores=preview.candidate_scores,
+                            selected_zip_path=selected_path,
+                            selected_score=selected_score,
+                            warning=None,
+                            issue=None,
+                        )
+                    )
+
+                self._validation_report = ValidationReport(
+                    preview_rows=tuple(updated_preview_rows),
+                    campaign_count=validation_report.campaign_count,
+                    zip_count=validation_report.zip_count,
+                    missing_zip_count=0,
+                    missing_suppression_count=validation_report.missing_suppression_count,
+                    issues=non_mapping_issues,
+                    warnings=validation_report.warnings,
+                    available_zip_paths=validation_report.available_zip_paths,
+                )
+                self._set_preview_text(self._format_validation_report(self._validation_report))
+                self._store_mapping_corrections({
+                    preview.campaign.name: selected_mapping[preview.campaign.name].stem
+                    for preview, _ in row_vars
+                })
                 confirmed["value"] = True
                 dialog.destroy()
 
             def _cancel() -> None:
                 dialog.destroy()
 
+            button_row = ctk.CTkFrame(dialog)
+            button_row.pack(fill="x", padx=18, pady=(0, 18))
             ctk.CTkButton(button_row, text="Confirm and Continue", command=_confirm).pack(side="right", padx=(8, 0))
             ctk.CTkButton(button_row, text="Cancel", command=_cancel).pack(side="right")
 
@@ -345,13 +468,32 @@ else:
             return confirmed["value"]
 
         def _set_entry(self, entry: ctk.CTkEntry, value: str) -> None:
+            try:
+                entry.configure(state="normal")
+            except Exception:
+                pass
             entry.delete(0, "end")
             entry.insert(0, value)
+            try:
+                entry.configure(state="readonly")
+            except Exception:
+                pass
 
         def _set_preview_text(self, text: str) -> None:
             self._preview_text.configure(state="normal")
             self._preview_text.delete("1.0", "end")
             self._preview_text.insert("1.0", text)
+
+        def _store_mapping_corrections(self, corrections: dict[str, str]) -> None:
+            try:
+                existing_history = load_mapping_history()
+                merged_history = merge_mapping_history(existing_history, corrections)
+                save_mapping_history(merged_history)
+            except Exception as error:
+                messagebox.showwarning(
+                    "Mapping history",
+                    f"Could not save preview corrections to history: {error}",
+                )
 
         def _set_log_text(self, text: str) -> None:
             self._log_text.configure(state="normal")
@@ -369,16 +511,26 @@ else:
         def _set_start_enabled(self, enabled: bool) -> None:
             self._start_button.configure(state="normal" if enabled else "disabled")
 
+        def _toggle_advanced_details(self) -> None:
+            if self._advanced_frame.winfo_ismapped():
+                self._advanced_frame.grid_remove()
+                self._advanced_toggle_button.configure(text="Show advanced details")
+            else:
+                self._advanced_frame.grid()
+                self._advanced_toggle_button.configure(text="Hide advanced details")
+
         def _set_busy(self, is_busy: bool, status_text: str | None = None) -> None:
             self._is_busy = is_busy
             state = "disabled" if is_busy else "normal"
             self._validate_button.configure(state=state)
             self._clear_button.configure(state=state)
             self._open_button.configure(state=state)
-            self._preview_button.configure(state="disabled" if is_busy else self._preview_button.cget("state"))
-            if not is_busy and self._validation_report is not None and not self._validation_report.issues:
+            self._preview_button.configure(state="disabled" if is_busy else ("normal" if self._validation_report is not None else "disabled"))
+            if is_busy:
+                self._start_button.configure(state="disabled")
+            elif self._validation_report is not None and not self._validation_report.issues:
                 self._start_button.configure(state="normal")
-            elif is_busy:
+            else:
                 self._start_button.configure(state="disabled")
 
             if status_text is not None:
@@ -465,6 +617,8 @@ else:
             available_strategies = {strategy.value for strategy in MappingStrategy}
             if settings.mapping_strategy in available_strategies:
                 self._selected_strategy.set(settings.mapping_strategy)
+            else:
+                self._selected_strategy.set(MappingStrategy.AUTO.value)
             self._pattern_template.set(settings.pattern_template or "{campaign}")
             self._handle_strategy_change(self._selected_strategy.get())
 

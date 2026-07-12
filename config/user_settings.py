@@ -16,7 +16,7 @@ class UserSettings:
     excel_path: str = ""
     zip_folder: str = ""
     output_folder: str = ""
-    mapping_strategy: str = MappingStrategy.EXACT.value
+    mapping_strategy: str = MappingStrategy.AUTO.value
     pattern_template: str = "{campaign}"
 
 
@@ -42,7 +42,7 @@ def load_user_settings(settings_path: Path | None = None) -> UserSettings:
         excel_path=str(raw_data.get("excel_path", "")),
         zip_folder=str(raw_data.get("zip_folder", "")),
         output_folder=str(raw_data.get("output_folder", "")),
-        mapping_strategy=str(raw_data.get("mapping_strategy", MappingStrategy.EXACT.value)),
+        mapping_strategy=str(raw_data.get("mapping_strategy", MappingStrategy.AUTO.value)),
         pattern_template=str(raw_data.get("pattern_template", "{campaign}")),
     )
 

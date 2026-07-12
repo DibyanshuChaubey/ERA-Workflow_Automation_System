@@ -12,7 +12,7 @@ from models.mapping import MappingStrategy
 class MappingConfig:
     """Rules used to map campaigns to ZIP files."""
 
-    strategy: MappingStrategy = MappingStrategy.EXACT
+    strategy: MappingStrategy = MappingStrategy.AUTO
     pattern_template: str | None = None
     case_sensitive: bool = False
 

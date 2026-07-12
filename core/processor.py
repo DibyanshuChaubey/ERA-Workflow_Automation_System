@@ -12,6 +12,7 @@ from models.run import CampaignMappingPreview, ExtractionResult, ValidationRepor
 from services.excel_reader import read_campaign_records
 from services.file_organizer import build_output_file_path, create_timestamped_output_dir
 from services.logging_service import create_run_logger
+from services.mapping_history import load_mapping_history, merge_mapping_history, save_mapping_history
 from services.mapping_service import build_mapping_preview
 from services.report_generator import generate_report
 from services.suppression_extractor import extract_suppression_file, select_suppression_member
@@ -51,6 +52,7 @@ class CampaignSuppressionProcessor:
 
         preview_rows, mapping_issues, _ = build_mapping_preview(list(mapped_campaigns), list(zip_paths), self._run_config.mapping)
         issues.extend(mapping_issues)
+        warnings = tuple(row.warning for row in preview_rows if row.warning)
 
         for zip_path in zip_paths:
             zip_result = validate_zip_file(zip_path)
@@ -75,6 +77,7 @@ class CampaignSuppressionProcessor:
             missing_zip_count=missing_zip_count,
             missing_suppression_count=missing_suppression_count,
             issues=tuple(issues),
+            available_zip_paths=tuple(zip_paths),
         )
 
     def extract(self, validation_report: ValidationReport) -> ExtractionResult:
@@ -82,11 +85,9 @@ class CampaignSuppressionProcessor:
             raise ValueError("Extraction cannot start until validation passes.")
 
         campaigns = read_campaign_records(self._run_config.excel_path)
-        zip_paths = list(list_zip_files(self._run_config.zip_folder))
-        mapped_campaigns = campaigns[1:] if len(campaigns) > 1 else tuple()
-        preview_rows, _, _ = build_mapping_preview(list(mapped_campaigns), zip_paths, self._run_config.mapping)
-
         first_campaign_name = campaigns[0].name if campaigns else "Campaign"
+        preview_rows = validation_report.preview_rows
+        zip_paths = list(list_zip_files(self._run_config.zip_folder))
         output_dir = create_timestamped_output_dir(self._run_config.output_folder, first_campaign_name)
         log_file = output_dir / "run.log"
         logger = create_run_logger(log_file)
@@ -114,7 +115,7 @@ class CampaignSuppressionProcessor:
             output_dir,
             ValidationReport(
                 preview_rows=tuple(preview_rows),
-                campaign_count=len(mapped_campaigns),
+                campaign_count=len(preview_rows),
                 zip_count=len(zip_paths),
                 missing_zip_count=0,
                 missing_suppression_count=0,
@@ -123,6 +124,16 @@ class CampaignSuppressionProcessor:
             report_result,
             status="SUCCESS",
         )
+
+        mapping_history = load_mapping_history()
+        mapped_pairs = {
+            preview_row.campaign.name: preview_row.selected_zip_path.stem
+            for preview_row in preview_rows
+            if preview_row.selected_zip_path is not None
+        }
+        merged_history = merge_mapping_history(mapping_history, mapped_pairs)
+        save_mapping_history(merged_history)
+
         return ExtractionResult(output_files=tuple(extracted_files), log_file=log_file, report_file=report_file)
 
     def _validate_campaigns(self, campaigns: tuple[CampaignRecord, ...]) -> list[ValidationIssue]:

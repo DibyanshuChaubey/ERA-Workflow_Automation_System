@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 
 class MappingStrategy(str, Enum):
@@ -13,6 +14,7 @@ class MappingStrategy(str, Enum):
     PARTIAL = "partial"
     PATTERN = "pattern"
     SMART = "smart"
+    AUTO = "auto"
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +23,14 @@ class CampaignZipMatch:
 
     campaign_name: str
     zip_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class CampaignZipScore:
+    """A candidate ZIP path plus its mapping score."""
+
+    zip_path: Path
+    score: int
 
 
 @dataclass(frozen=True, slots=True)

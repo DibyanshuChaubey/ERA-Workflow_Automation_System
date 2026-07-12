@@ -11,6 +11,5 @@ def main() -> None:
     app = CampaignSuppressionApp()
     app.run()
 
-
 if __name__ == "__main__":
     main()

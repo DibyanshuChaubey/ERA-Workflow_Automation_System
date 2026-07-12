@@ -13,12 +13,16 @@ ADT_AD,adt
 AHS_AD,ahs_suppression
 RYH FLOORING_AD,remodel your home flooring 
 RYH FLOORING_AD,remodel flooring
+RYH - ROOFING_GZ,cleansed_list--RemodelYourHomeRoofing-
 VIVINT_AD, vivint
 TRUGREEN_AD,trugreen
 WN_AD,window nation
 INSURIFY_GZ,insurify 
 LR_GZ,lion rates
 XCE_AIR, Auto insurance retarget
+XCE_AIR, Auto insurance retarget MASTER
+XCE_AIR, cleansed_list--Auto_Insurance_Retarget_-_Master_TMA_-20260707
+AIR_XCE, cleansed_list--Auto_Insurance_Retarget_-_Master_TMA_-20260707
 JG_XCE, jg debt setelment
 JG_XCE,cleansed_list--JG_Wentworth_Debt_Settlement
 FIR_XC,fast insurance
@@ -26,8 +30,23 @@ CH_XC,coverage hunters
 FGLO_DB,finance gov
 LBH_DB,liz buys 
 ASSURITI_DB,assuritii Auto
-NDR_CMAD, national debt
+NDR_GZ, national debt
 WS_CMAD, west shore
+west_shore_cmad, west shore
 QLR_ES,QL- LRE
 ZBH_ES,ziggy buys 
-
+SQMH_ES,cleansed_list--SelectQuote_Medicare
+SQMH_ES,SELECTQUOTE MEDICARE HELPLINE (ES)
+EFA_ES,cleansed_list--Empire_Flooring_Appts_-_CPL_US_-20260706
+EFA_ES,EMPIRE FLOORING APPTS
+QUOTIFII_DB,QUOTIFII AUTO INSURANCE -- SUMMER PAGE
+QUOTIFII_DB,cleansed_list--EXCLUSIVE_-_Quotifii_Auto_Insurance_-_SUMMER_PAGE
+NDR_CMAD,National_Debt_Relief_(NDR)
+EAC_CMAD,cleansed_list--US_-_EXCLUSIVE_Endurance_Auto_Protection_(M-F_Drops_ONLY)
+NDR_GZ,NationalDebtReliefQualifiedLead(Mon-Fri)-20260706
+ARW_AD,suppression_list--US_-_ARW_290_SAVINGS_(email)-20260707-DONT_EMAIL_TO_THESE
+ARW_AD, ARW
+QHI_DB,QUOTIFII HOME
+QHI_DB,Quotifii Home Savings
+GZ-RYHR,cleansed_list--RemodelYourHomeRoofing
+GZ_RYHR,RemodelYourHomeRoofing

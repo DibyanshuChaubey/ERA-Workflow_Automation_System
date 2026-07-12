@@ -82,6 +82,41 @@ def test_mapping_service_smart_mode_handles_aliases(tmp_path: Path) -> None:
     assert matches[0].zip_path.endswith("Window Nation Advertiser.zip")
 
 
+def test_mapping_service_auto_mode_selects_best_match(tmp_path: Path) -> None:
+    refi_zip = tmp_path / "Refi Kart.zip"
+    refi_2024_zip = tmp_path / "Refi Kart 2024.zip"
+    window_zip = tmp_path / "Window Nation Advertiser.zip"
+    for zip_path in (refi_zip, refi_2024_zip, window_zip):
+        _write_zip(zip_path)
+
+    campaigns = [CampaignRecord(index=1, name="RGR")]
+    preview, issues, matches = build_mapping_preview(
+        campaigns,
+        [refi_zip, refi_2024_zip, window_zip],
+        MappingConfig(strategy=MappingStrategy.AUTO),
+    )
+
+    assert issues == []
+    assert preview[0].selected_zip_path == refi_zip
+    assert matches[0].zip_path.endswith("Refi Kart.zip")
+
+
+def test_mapping_service_auto_mode_matches_separator_variants(tmp_path: Path) -> None:
+    zip_path = tmp_path / "RYHR_GZ.zip"
+    _write_zip(zip_path)
+
+    campaign = CampaignRecord(index=1, name="GZ-RYHR")
+    preview, issues, matches = build_mapping_preview(
+        [campaign],
+        [zip_path],
+        MappingConfig(strategy=MappingStrategy.AUTO),
+    )
+
+    assert issues == []
+    assert preview[0].selected_zip_path == zip_path
+    assert matches[0].zip_path.endswith("RYHR_GZ.zip")
+
+
 def test_alias_rule_loader_supports_explicit_override(tmp_path: Path) -> None:
     alias_path = tmp_path / "campaign_aliases.csv"
     alias_path.write_text("campaign_key,alias\nrgr,Refi Kart\nrgr,Refi_Kart\n", encoding="utf-8")

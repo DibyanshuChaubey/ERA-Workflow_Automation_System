@@ -176,3 +176,10 @@ def test_output_ordering_uses_campaign_position(tmp_path: Path) -> None:
     file_path = build_output_file_path(output_dir, 7, "Suppression List.csv")
     assert file_path.name == "007 Suppression List.csv"
     assert output_dir.name == "Summer Sale SUPP"
+
+
+def test_output_file_uses_campaign_name_for_generic_suppression_name(tmp_path: Path) -> None:
+    output_dir = tmp_path / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_path = build_output_file_path(output_dir, 3, "suppression.csv", campaign_name="RGR Campaign")
+    assert file_path.name == "003 RGR Campaign Suppression.csv"

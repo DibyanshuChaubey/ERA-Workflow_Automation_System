@@ -100,7 +100,12 @@ class CampaignSuppressionProcessor:
                 raise ValueError(suppression_selection.issue.message if suppression_selection.issue else "Suppression file validation failed.")
 
             original_filename = Path(suppression_selection.member_name).name
-            output_path = build_output_file_path(output_dir, position, original_filename)
+            output_path = build_output_file_path(
+                output_dir,
+                position,
+                original_filename,
+                campaign_name=preview_row.campaign.name,
+            )
             extracted_file = extract_suppression_file(
                 preview_row.selected_zip_path,
                 suppression_selection.member_name,

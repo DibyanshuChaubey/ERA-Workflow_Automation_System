@@ -21,11 +21,25 @@ def create_timestamped_output_dir(base_output_folder: Path, campaign_name: str) 
     return candidate
 
 
-def build_output_file_path(output_dir: Path, position: int, original_filename: str) -> Path:
+def build_output_file_path(output_dir: Path, position: int, original_filename: str, campaign_name: str | None = None) -> Path:
     """Generate the output file path in campaign order while preserving the original file name."""
 
     safe_name = Path(original_filename).name
+    if campaign_name and _is_generic_suppression_name(safe_name):
+        campaign_label = _sanitize_file_name(campaign_name)
+        safe_name = f"{campaign_label} Suppression.csv"
+
     return output_dir / f"{position:03d} {safe_name}"
+
+
+def _is_generic_suppression_name(filename: str) -> bool:
+    name = Path(filename).stem.lower()
+    return name in {"suppression", "suppressionlist", "suppression_list", "suppressioncsv"}
+
+
+def _sanitize_file_name(value: str) -> str:
+    cleaned = "".join(character if character.isalnum() or character in {" ", "-", "_"} else "_" for character in value.strip())
+    return " ".join(cleaned.split()) or "Campaign"
 
 
 def _sanitize_folder_name(value: str) -> str:

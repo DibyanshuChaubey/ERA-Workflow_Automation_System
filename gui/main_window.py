@@ -106,15 +106,18 @@ else:
             header.grid_columnconfigure(0, weight=1)
             header.grid_columnconfigure(1, weight=0)
 
+            accent_bar = ctk.CTkFrame(header, height=4, corner_radius=999, fg_color=("#2563eb", "#3b82f6"))
+            accent_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=18, pady=(18, 0))
+
             left = ctk.CTkFrame(header, fg_color="transparent")
-            left.grid(row=0, column=0, sticky="w", padx=20, pady=18)
+            left.grid(row=1, column=0, sticky="w", padx=20, pady=18)
             ctk.CTkLabel(left, text="ERA-Campaign Suppression Manager", font=ctk.CTkFont(size=24, weight="bold")).pack(anchor="w")
-            ctk.CTkLabel(left, text="Validate smart campaign-to-ZIP mapping, review it visually, and extract suppression files with confidence.", font=ctk.CTkFont(size=13), text_color=("gray50", "gray70")).pack(anchor="w", pady=(6, 10))
+            ctk.CTkLabel(left, text="Precision campaign mapping, preview-first extraction, and elegant workflow automation.", font=ctk.CTkFont(size=13), text_color=("gray50", "gray70")).pack(anchor="w", pady=(6, 10))
             self._build_header_badges(left)
 
-            right = ctk.CTkFrame(header, corner_radius=18, border_width=1, fg_color=("#eef7ff", "#1f2b3d"))
-            right.grid(row=0, column=1, sticky="e", padx=18, pady=18)
-            ctk.CTkLabel(right, text="Smart flow", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=14, pady=(12, 4))
+            right = ctk.CTkFrame(header, corner_radius=20, border_width=1, fg_color=("#eef7ff", "#1f2b3d"))
+            right.grid(row=1, column=1, sticky="e", padx=18, pady=18)
+            ctk.CTkLabel(right, text="Confidence-first flow", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=14, pady=(12, 4))
             ctk.CTkLabel(right, text="Auto-match • Preview • Extract", font=ctk.CTkFont(size=12), text_color=("gray50", "gray70")).pack(anchor="w", padx=14, pady=(0, 12))
 
             input_card = self._create_section_card(container, 1, "Get started", "Select your campaign source, ZIP folder, and output destination.")
@@ -334,12 +337,18 @@ else:
             self._persist_user_settings()
             return CampaignSuppressionProcessor(run_config)
 
+        def _format_confidence(self, score: int | None) -> str:
+            if score is None:
+                return ""
+            normalized = max(0, min(100, int(score)))
+            return f" (confidence {normalized}%)"
+
         def _format_validation_report(self, validation_report) -> str:
             lines: list[str] = []
             for output_position, preview in enumerate(validation_report.preview_rows, start=1):
                 if preview.issue is None and preview.selected_zip_path is not None:
-                    score_text = f" (score={preview.selected_score})" if preview.selected_score else ""
-                    lines.append(f"{output_position:03d}. {preview.campaign.name} -> {preview.selected_zip_path.name}{score_text}")
+                    confidence_text = self._format_confidence(preview.selected_score)
+                    lines.append(f"{output_position:03d}. {preview.campaign.name} -> {preview.selected_zip_path.name}{confidence_text}")
                     if preview.warning:
                         lines.append(f"    WARNING: {preview.warning}")
                 else:

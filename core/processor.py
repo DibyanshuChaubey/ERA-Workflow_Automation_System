@@ -138,6 +138,7 @@ class CampaignSuppressionProcessor:
         }
         merged_history = merge_mapping_history(mapping_history, mapped_pairs)
         save_mapping_history(merged_history)
+        logger.info("Persisted mapping history for future runs: %s", mapped_pairs)
 
         return ExtractionResult(output_files=tuple(extracted_files), log_file=log_file, report_file=report_file)
 

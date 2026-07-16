@@ -462,6 +462,8 @@ else:
                     preview.campaign.name: selected_mapping[preview.campaign.name].stem
                     for preview, _ in row_vars
                 })
+                self._set_status("Saved corrected mappings to memory")
+                self._append_log("Saved corrected mappings to memory for future runs")
                 confirmed["value"] = True
                 dialog.destroy()
 

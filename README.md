@@ -1,65 +1,68 @@
-# Campaign Suppression Manager
+# ERA Campaign Suppression Manager
 
-Campaign Suppression Manager is a Python desktop application for daily data-operations workflows. It reads an ordered campaign Excel workbook, maps each campaign to exactly one downloaded ZIP file, previews the resolved mapping, extracts only the suppression file from each ZIP, and writes the results in Excel order.
+ERA Campaign Suppression Manager is a Windows desktop application for automating campaign suppression file processing. It reads ordered campaign data from Excel, matches each campaign to a single ZIP archive, previews the resolved mapping, extracts suppression lists, and writes the results in campaign order.
 
-## Version 1.0 Scope
+## Key Features
 
-- No API integration.
-- No web automation.
-- Only already-downloaded ZIP files are processed.
-- Validation fails fast if anything is ambiguous or missing.
+- Modern desktop UI with preview-first workflow.
+- Automatic campaign-to-ZIP matching with alias and history learning.
+- Intelligent ZIP validation for corruption, password protection, and empty archives.
+- Suppression-only extraction with campaign-aware output naming.
+- Ordered numerical output file naming.
+- Detailed run log and summary report generation.
+- Persistent mapping history for stronger future predictions.
 
-## Features
+## Install
 
-- CustomTkinter desktop UI with a preview-before-start workflow.
-- Excel campaign reading with order preservation and blank-row skipping.
-- ZIP validation for corruption, password protection, and empty archives.
-- Configurable campaign-to-ZIP mapping strategy.
-- Suppression-only extraction.
-- Ordered file output with numbered prefixes.
-- Run log and summary report generation.
-- Pytest coverage for the core services and end-to-end processor flow.
-- Explicit alias rules for campaign codes that do not map cleanly by name.
-
-## Project Structure
-
-- `app.py` - application entry point.
-- `gui/` - desktop UI.
-- `core/` - orchestration and workflow control.
-- `services/` - Excel, ZIP, mapping, extraction, logging, reporting, and file organization.
-- `models/` - domain and workflow data models.
-- `config/` - runtime configuration objects.
-- `tests/` - pytest coverage.
-
-## Run Locally
-
-1. Create or activate the project virtual environment.
-2. Install dependencies with `pip install -r requirements.txt`.
-3. Launch the app with `python app.py`.
-
-## Test
-
-Run the test suite with:
+1. Create or activate the virtual environment.
+2. Install dependencies:
 
 ```bash
-pytest -q
+pip install -r requirements.txt
 ```
 
-## Packaging
+## Run the App
 
-PyInstaller is included in the dependency list so the app can be packaged once the workflow is finalized.
+```bash
+python app.py
+```
 
-Build a Windows executable with:
+## Build a Windows Executable
 
 ```bash
 pyinstaller CampaignSuppressionManager.spec
 ```
 
-## Alias Training File
+The packaged executable is written to `dist/CampaignSuppressionManager.exe`.
 
-The smart mapping strategy reads [config/campaign_aliases.csv](config/campaign_aliases.csv) by default.
+## Project Layout
 
-Add rows in this format to teach the matcher new equivalents:
+- `app.py` — application entry point.
+- `gui/` — user interface and workflow orchestration.
+- `core/` — validation and extraction orchestration.
+- `config/` — runtime configuration and user settings.
+- `models/` — domain and workflow data models.
+- `services/` — Excel reading, ZIP discovery, mapping, extraction, reporting, and file organization.
+- `tests/` — automated regression and unit tests.
+
+## Configuration
+
+### Mapping History
+
+The app stores corrected mappings in the user profile at:
+
+- `%USERPROFILE%\.campaign_suppression_manager\mapping_history.json`
+
+This enables the system to learn from preview confirmations and prefer previously accepted ZIP matches.
+
+### Alias Training
+
+The smart matcher reads alias data from:
+
+- `config/campaign_aliases.csv`
+- `config/campaign_aliases.json`
+
+Use `campaign_aliases.csv` to add deterministic alias pairs:
 
 ```csv
 campaign_key,alias
@@ -67,18 +70,28 @@ rgr,Refi Kart
 wn_ad,Window Nation Advertiser
 ```
 
-This is the recommended way to "train" mapping behavior because it is deterministic, auditable, and easy to update without changing code.
-
-## Alias Rules
-
-Use [config/campaign_aliases.json](config/campaign_aliases.json) to define explicit campaign-code to ZIP-name aliases. This is the safest way to map abbreviations such as `RGR` to `Refi Kart` when the name itself does not contain enough information for automatic matching.
+Use `campaign_aliases.json` for explicit alias rules when campaign codes require exact ZIP-name mappings.
 
 ## Workflow
 
 1. Select the campaign Excel file.
-2. Select the folder containing downloaded ZIP files.
+2. Select the ZIP folder containing downloaded archives.
 3. Select the output folder.
-4. Validate the mapping preview.
-5. Confirm the preview.
-6. Start extraction.
-7. Review the generated output, log, and summary report.
+4. Click **Validate** to preview the campaign-to-ZIP mapping.
+5. Confirm or correct the preview.
+6. Click **Extract** to write suppression files.
+7. Review output, log, and summary files.
+
+## Testing
+
+Run the automated test suite:
+
+```bash
+pytest -q
+```
+
+## Notes
+
+- The app is designed for offline ZIP processing only.
+- Validation is performed before extraction to prevent partial or ambiguous results.
+- Generic suppression filenames are rewritten with the mapped campaign name for easier tracking.
